@@ -1,6 +1,0 @@
-name: Rust AGB Crate
-version: 0.0.1
-schema: v1
-docs:
-  - name: Rust AGB Crate
-    startUrl: https://docs.rs/agb/latest/agb/
