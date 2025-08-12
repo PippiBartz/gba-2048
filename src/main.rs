@@ -17,7 +17,8 @@
 // The main function must take 1 arguments and never return. The agb::entry decorator
 // ensures that everything is in order. `agb` will call this after setting up the stack
 // and interrupt handlers correctly. It will also handle creating the `Gba` struct for you.
+
 #[agb::entry]
 fn main(mut gba: agb::Gba) -> ! {
-    agb::no_game(gba);
+    gba_2048::run(gba)
 }

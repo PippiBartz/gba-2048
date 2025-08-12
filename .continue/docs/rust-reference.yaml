@@ -1,0 +1,6 @@
+name: Rust Reference
+version: 0.0.1
+schema: v1
+docs:
+  - name: Rust Reference
+    startUrl: https://doc.rust-lang.org/stable/reference/

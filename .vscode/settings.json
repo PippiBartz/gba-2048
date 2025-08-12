@@ -1,0 +1,4 @@
+{
+    "continue.telemetryEnabled": false,
+    "rust-analyzer.checkOnSave": true
+}
