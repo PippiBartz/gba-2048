@@ -111,8 +111,6 @@ pub fn run(mut gba: agb::Gba) -> ! {
     let mut bg = RegularBackground::new(Priority::P0, RegularBackgroundSize::Background32x32, TileFormat::FourBpp);
     bg.fill_with(&background::bg);
 
-    // let sprites = sprite_init();
-
     let mut game = Game::init(&mut rng);
 
 

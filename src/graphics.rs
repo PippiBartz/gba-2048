@@ -12,7 +12,6 @@ pub const TOP_LEFT: Vector2D<i32> = Vector2D::new(56, 16);
 pub const TILE_SIZE: u32 = 32;
 
 pub const ANIMATION_TIME: i32 = 8;
-pub const ANIMATION_SMOOTH: i32 = 3;
 
 
 impl Game {
@@ -55,8 +54,10 @@ impl Game {
 
                     tile.animate_move(destination, &mut frame);
 
-                } else {
+                } else if !tile.appearing {
+
                     tile.show(&mut frame); //so that all tiles are displayed during animation frames
+
                 }
                 
             }
@@ -90,7 +91,6 @@ impl Tile {
         let og_position_adjusted = self.pos * TILE_SIZE as i32 + TOP_LEFT;
         let destination_adjusted = destination * TILE_SIZE as i32 + TOP_LEFT;
 
-        //object moves half the distance towards destination each iteration
         self.object.set_pos(self.object.pos() + (destination_adjusted - og_position_adjusted) / (ANIMATION_TIME + 1));
         self.object.set_priority(Priority::P0);
         self.object.show(frame);
@@ -110,10 +110,6 @@ impl Tile {
         self.set_pos();
 
         if self.value != 0 {
-
-            if self.appearing {
-                
-            }
             self.object.show(frame);
         }
     }
