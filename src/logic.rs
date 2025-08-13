@@ -1,9 +1,7 @@
-use core::iter;
-
+use agb::display::object::SpriteVram;
 use agb::display::tiled::RegularBackground;
-use agb::display::{Graphics, GraphicsFrame};
-use agb::println;
-use agb::{display::object::SpriteVram, fixnum::Vector2D, rng::RandomNumberGenerator};
+use agb::display::Graphics;
+use agb::{fixnum::Vector2D, rng::RandomNumberGenerator};
 extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -19,7 +17,7 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
-pub struct Move {
+struct Move {
     start: usize,
     end: usize,
     upgrade: bool,
@@ -68,6 +66,7 @@ impl Game {
         let rand_blank = &mut blanks[rand_index];
 
         self.board[rand_blank.0].update_obj = true;
+        self.board[rand_blank.0].appearing = true;
         self.board[rand_blank.0].value = if rand_value == 0 {4} else {2};
 
     }
@@ -75,7 +74,7 @@ impl Game {
     pub fn shift(&mut self, dir: Direction, rng: &mut RandomNumberGenerator, gfx: &mut Graphics, bg: &RegularBackground) {
 
         if self.shift_tiles(dir) {
-            self.animate_tiles(gfx, bg);
+            self.animate_move_tiles(gfx, bg);
             self.spawn_tile(rng);
         }
 
@@ -100,6 +99,7 @@ impl Game {
                 self.board[m.start].update_obj = true;
                 self.board[m.start].animate = Some(m.to_vec2d().1);
                 self.board[m.end].update_obj = true;
+                self.board[m.end].appearing = true;
 
             }
             true

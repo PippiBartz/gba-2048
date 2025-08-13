@@ -5,11 +5,11 @@
 #![cfg_attr(test, test_runner(agb::test_runner::test_runner))]
 
 
-use agb::{display::{object::{Object, SpriteVram}, tiled::{RegularBackground, RegularBackgroundSize, TileFormat, VRAM_MANAGER}, Priority}, fixnum::Vector2D, include_aseprite, include_background_gfx, input::{Button, ButtonController, Tri}, println, rng::RandomNumberGenerator};
+use agb::{display::{object::{Object, SpriteVram}, tiled::{RegularBackground, RegularBackgroundSize, TileFormat, VRAM_MANAGER}, Priority}, fixnum::Vector2D, include_aseprite, include_background_gfx, input::{Button, ButtonController}, rng::RandomNumberGenerator};
 use alloc::vec::Vec;
 use alloc::vec;
 
-use crate::graphics::{sprite_init, value_to_sprite};
+use crate::graphics::sprite_init;
 use crate::logic::Direction;
 pub mod graphics;
 pub mod logic;
@@ -18,27 +18,26 @@ extern crate alloc;
 include_background_gfx!(mod background, bg => deduplicate "gfx/bg.aseprite");
 include_aseprite!(mod tile_gfx, "gfx/tiles.aseprite");
 
-const SIZE: usize = 4 * 4; // 4x4 grid
-
 
 #[derive(Debug, Clone)]
 struct Tile {
-    object: Object,
+    object: Object,             
     pos: Vector2D<i32>,
     value: u16,
-    update_obj: bool,
-    animate: Option<Vector2D<i32>>,
+    update_obj: bool, //true when object sprite needs updating
+    animate: Option<Vector2D<i32>>, //Some(destination) when animation needed
+    appearing: bool, //true when tile is queued to appear
 }
 
 impl PartialOrd for Tile {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        self.pos.y.partial_cmp(&other.pos.y)
+        self.pos.y.partial_cmp(&other.pos.y) //prioritize comparing the y value
     }
 }
 
 impl Ord for Tile {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.pos.y.cmp(&other.pos.y).then(self.pos.x.cmp(&other.pos.x))
+        self.pos.y.cmp(&other.pos.y).then(self.pos.x.cmp(&other.pos.x)) //compare y value before x
     }
 }
 
@@ -50,26 +49,30 @@ impl PartialEq for Tile {
 
 impl Eq for Tile {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 struct Game {
     board: Vec<Tile>,
+    sprites: Vec<SpriteVram>,
     score: u32,
 }
 
-
 impl Game {
-    fn new(sprite: SpriteVram) -> Self {
+
+    fn new() -> Self {
 
         let mut tiles = vec![];
+
+        let sprites = sprite_init();
 
         for y in 0..4 {
             for x in 0..4 {
                 tiles.push(Tile {
-                    object: Object::new(sprite.clone()),
+                    object: Object::new(sprites[0].clone()),
                     pos: (x, y).into(),
                     value: 0,
                     update_obj: false,
                     animate: None,
+                    appearing: false,
                 });
             }
         }
@@ -78,43 +81,12 @@ impl Game {
             tile.set_pos();
         }
 
-
-        Self { board: tiles, score: 0 }
+        Self { board: tiles, sprites: sprites, score: 0 }
     }
 
-    fn _new_custom(sprites: Vec<SpriteVram>, tile_values: Vec<u16>) -> Self {
+    fn init(mut rng: &mut RandomNumberGenerator) -> Self {
 
-        let mut tiles: Vec<Tile> = vec![];
-
-        for tile in 0..16 {
-
-            if tile_values[tile] == 0 {
-                tiles.push(Tile {
-                    object: Object::new(sprites[0].clone()),
-                    pos: (tile as i32 / 4, tile as i32 % 4).into(),
-                    value: 0,
-                    update_obj: false,
-                    animate: None,
-                });
-            } else {
-                tiles.push(Tile {
-                    object: Object::new(sprites[value_to_sprite(tile_values[tile]).unwrap()].clone()),
-                    pos: (tile as i32 / 4, tile as i32 % 4).into(),
-                    value: tile_values[tile],
-                    update_obj: false,
-                    animate: None,
-                })
-            }
-        }
-
-        Self { board: tiles, score: 0 }
-
-
-    }
-
-    fn init(mut rng: &mut RandomNumberGenerator, sprite: SpriteVram) -> Self {
-
-        let mut game = Self::new(sprite);
+        let mut game = Self::new();
 
         game.spawn_tile(&mut rng);
         game.spawn_tile(&mut rng);
@@ -129,32 +101,26 @@ impl Game {
 
 
 pub fn run(mut gba: agb::Gba) -> ! {
+
     let mut gfx = gba.graphics.get();
     let mut rng = RandomNumberGenerator::new();
-    let mut frame = gfx.frame();
     let mut input = ButtonController::new();
-
-
 
     VRAM_MANAGER.set_background_palettes(background::PALETTES);
 
     let mut bg = RegularBackground::new(Priority::P0, RegularBackgroundSize::Background32x32, TileFormat::FourBpp);
     bg.fill_with(&background::bg);
 
-    let sprites = sprite_init();
+    // let sprites = sprite_init();
 
+    let mut game = Game::init(&mut rng);
 
-    let mut game = Game::init(&mut rng, sprites[0].clone());
-
-    game.update_tiles(&mut frame, sprites.clone());
-    
 
     loop {
 
         input.update();
 
-        
-
+        //TODO: improve input system
         if input.is_just_pressed(Button::UP) {
             game.shift(Direction::Up, &mut rng, &mut gfx, &bg);
         } else if input.is_just_pressed(Button::DOWN) {
@@ -165,15 +131,10 @@ pub fn run(mut gba: agb::Gba) -> ! {
             game.shift(Direction::Right, &mut rng, &mut gfx, &bg);
         }
 
-
-
-
         let mut frame = gfx.frame();
 
-        game.update_tiles(&mut frame, sprites.clone());
+        game.show_tiles(&mut frame);
         bg.show(&mut frame);
-
-
 
         frame.commit();
 
