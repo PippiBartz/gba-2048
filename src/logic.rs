@@ -68,7 +68,11 @@ impl Game {
 
         self.board[rand_blank.0].update_obj = true;
         self.board[rand_blank.0].appearing = true;
-        self.board[rand_blank.0].value = if rand_value == 0 {4} else {2};
+
+        let rand_tile_value = if rand_value == 0 {4} else {2};
+
+        self.board[rand_blank.0].value = rand_tile_value;
+        self.score += rand_tile_value as u32;
 
     }
 
@@ -79,6 +83,27 @@ impl Game {
             //if spawn flag is false, do not spawn new tiles
             if self.spawn { self.spawn_tile(rng) }
         }
+
+    }
+
+    pub fn get_score(&self) -> u32 {
+        let mut score = 0;
+        for tile in self.board.iter() {
+            score += tile.value as u32;
+        }
+        score
+    }
+
+    pub fn check_stuck(&self) -> bool {
+
+        if self.board.len() == 16 {
+
+            if Move::get(&self.board, Direction::Up).is_empty() && Move::get(&self.board, Direction::Down).is_empty() && Move::get(&self.board, Direction::Left).is_empty() && Move::get(&self.board, Direction::Right).is_empty() {
+                return true
+            }
+        }
+
+        false
 
     }
 

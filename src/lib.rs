@@ -9,7 +9,7 @@ use agb::{display::{object::{Object, Sprite, SpriteVram}, tiled::{RegularBackgro
 use alloc::vec::Vec;
 use alloc::vec;
 
-use crate::graphics::{game_sprite_init, value_to_sprite_index};
+use crate::graphics::{game_sprite_init, value_to_sprite_index, START_ANIMATION};
 use crate::logic::Direction;
 pub mod graphics;
 pub mod logic;
@@ -20,11 +20,12 @@ include_aseprite!(mod tile_gfx, "gfx/tiles.aseprite", "gfx/tiles_menu.aseprite",
 
 #[derive(Debug, Clone)]
 struct Menu {
-    text: [Object; 4],
-    in_motion: [bool; 4],
+    text_one: [Object; 4],
+    text_two: [Object; 4],
     button: Object,
     //sprites: Vec<SpriteVram>,
     test: bool,
+    game_over: bool,
     pressed: bool,
     high_score: u32,
 }
@@ -34,15 +35,21 @@ impl Menu {
     fn new() -> Self {
 
         Self {
-            text: [
+            text_one: [
+                Object::new(SpriteVram::from(tile_gfx::NAME.sprite(0))),
+                Object::new(SpriteVram::from(tile_gfx::NAME.sprite(1))),
+                Object::new(SpriteVram::from(tile_gfx::NAME.sprite(2))),
+                Object::new(SpriteVram::from(tile_gfx::NAME.sprite(3))),
+            ],
+            text_two: [
                 Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(0))),
                 Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(1))),
                 Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(2))),
                 Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(3))),
             ],
-            in_motion: [false; 4],
             button: Object::new(SpriteVram::from(tile_gfx::A.sprite(0))),
             test: false,
+            game_over: false,
             pressed: false,
             high_score: 0,
         }
@@ -152,6 +159,8 @@ impl Game {
     fn play(&mut self, input: &mut ButtonController, gfx: &mut Graphics, rng: &mut RandomNumberGenerator, bg: &RegularBackground) {
 
         loop {
+
+
             input.update();
 
             //TODO: improve input system
@@ -169,6 +178,10 @@ impl Game {
                 if input.is_just_pressed(Button::B) {
                     self.spawn_tile(rng);
                 }
+            }
+
+            if self.check_stuck() {
+                break;
             }
 
             let mut frame = gfx.frame();
@@ -204,6 +217,9 @@ pub fn run(mut gba: agb::Gba) -> ! {
 
     loop {
 
+        menu.game_over = false;
+        menu.pressed = false;
+
         while !menu.pressed {
 
             rng.next_i32(); //call every frame to randomize rng state
@@ -235,10 +251,10 @@ pub fn run(mut gba: agb::Gba) -> ! {
         if menu.test {
 
             let tile_values = [
-                2, 2, 2, 2,
-                4, 0, 2, 2,
-                2, 4, 4, 8,
-                8, 4, 4, 0,
+                8, 16, 8, 16,
+                16, 8, 16, 8,
+                8, 16, 8, 16,
+                16, 0, 16, 8,
             ];
 
             let mut game = Game::init_with_board(tile_values);
@@ -250,6 +266,32 @@ pub fn run(mut gba: agb::Gba) -> ! {
             let mut game = Game::init(&mut rng);
 
             game.play(&mut input, &mut gfx, &mut rng, &bg);
+
+        }
+
+        menu.pressed = false;
+        menu.game_over = true;
+        menu.set();
+        menu.fade_out(&mut gfx, &bg, START_ANIMATION * 4);
+        menu.fade_in(&mut gfx, &bg, START_ANIMATION);
+
+        while !menu.pressed {
+
+            rng.next_i32(); //call every frame to randomize rng state
+            let mut frame = gfx.frame();
+
+            bg.show(&mut frame);
+            menu.show(&mut frame);
+
+            frame.commit();
+
+
+            input.update();
+
+            if input.is_just_pressed(Button::A) {
+                menu.fade_in_out(&mut gfx, &bg, START_ANIMATION / 2);
+                menu.pressed = true;
+            }
 
         }
 

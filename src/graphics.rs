@@ -13,8 +13,8 @@ use crate::{tile_gfx, Game, Menu, Tile};
 pub const TOP_LEFT: Vector2D<i32> = Vector2D::new(56, 16);
 pub const TILE_SIZE: u32 = 32;
 
-pub const ANIMATION_TIME: i32 = 8;
-pub const START_ANIMATION: i32 = ANIMATION_TIME * 4;
+pub const TILE_ANIMATION: i32 = 8;
+pub const START_ANIMATION: i32 = TILE_ANIMATION * 4;
 
 impl Menu {
 
@@ -24,7 +24,15 @@ impl Menu {
     }
 
     fn set_pos(&mut self) {
-        for (i, letter) in self.text.iter_mut().enumerate() {
+
+        for (i, letter) in self.text_one.iter_mut().enumerate() {
+
+            let (x, y) = (TOP_LEFT.x as u32 + TILE_SIZE * i as u32, TOP_LEFT.y as u32);
+            letter.set_pos(Vector2D::new(x as i32, y as i32));
+
+        }
+
+        for (i, letter) in self.text_two.iter_mut().enumerate() {
 
             let (x, y) = (TOP_LEFT.x as u32 + TILE_SIZE * i as u32, TOP_LEFT.y as u32 + TILE_SIZE);
             letter.set_pos(Vector2D::new(x as i32, y as i32));
@@ -35,7 +43,10 @@ impl Menu {
     }
 
     pub fn show(&mut self, frame: &mut GraphicsFrame) {
-        for letter in self.text.iter_mut() {
+        for letter in self.text_one.iter_mut() {
+            letter.show(frame);
+        }
+        for letter in self.text_two.iter_mut() {
             letter.show(frame);
         }
         self.button.show(frame);
@@ -43,15 +54,34 @@ impl Menu {
 
     fn set_objs(&mut self) {
 
-        if self.test {
-            for (i, letter) in self.text.iter_mut().enumerate() {
-                letter.set_sprite(SpriteVram::from(tile_gfx::TEST.sprite(i)));
+        if self.game_over {
+
+            for (i, letter) in self.text_one.iter_mut().enumerate() {
+                letter.set_sprite(SpriteVram::from(tile_gfx::GAME.sprite(i)));
             }
+            for (i, letter) in self.text_two.iter_mut().enumerate() {
+                letter.set_sprite(SpriteVram::from(tile_gfx::OVER.sprite(i)));
+            }
+
         } else {
-            for (i, letter) in self.text.iter_mut().enumerate() {
-                letter.set_sprite(SpriteVram::from(tile_gfx::PLAY.sprite(i)));
+
+            for (i, letter) in self.text_one.iter_mut().enumerate() {
+                letter.set_sprite(SpriteVram::from(tile_gfx::NAME.sprite(i)));
             }
+    
+            if self.test {
+                for (i, letter) in self.text_two.iter_mut().enumerate() {
+                    letter.set_sprite(SpriteVram::from(tile_gfx::TEST.sprite(i)));
+                }
+            } else {
+                for (i, letter) in self.text_two.iter_mut().enumerate() {
+                    letter.set_sprite(SpriteVram::from(tile_gfx::PLAY.sprite(i)));
+                }
+            }
+
         }
+
+        
 
     }
 
@@ -65,11 +95,16 @@ impl Menu {
     pub fn animate(&mut self, gfx: &mut Graphics, bg: &RegularBackground) {
 
         self.animate_start(gfx, bg);
-        self.animate_end(gfx, bg);
+        self.fade_in(gfx, bg, START_ANIMATION / 2);
 
     }
 
-    fn animate_end(&mut self, gfx: &mut Graphics, bg: &RegularBackground) {
+    pub fn fade_in_out(&mut self, gfx: &mut Graphics, bg: &RegularBackground, time: i32) {
+        self.fade_out(gfx, bg, time);
+        self.fade_in(gfx, bg, time);
+    }
+
+    pub fn fade_in(&mut self, gfx: &mut Graphics, bg: &RegularBackground, time: i32) {
 
         let blend_amts: [Num<u8, 4>; 5] = [
             num!(1.0),
@@ -81,7 +116,7 @@ impl Menu {
 
         let mut blend_lvl = 0;
 
-        for anim_frame in 0..ANIMATION_TIME {
+        for anim_frame in 0..time {
 
             let mut frame = gfx.frame();
 
@@ -89,7 +124,37 @@ impl Menu {
 
             frame.blend().darken(blend_amts[blend_lvl]).enable_background(bg_id).enable_object();
 
-            if anim_frame % 2 == 0 && blend_lvl < 4 {
+            if anim_frame % (time / 4) == 0 && blend_lvl < 4 {
+                blend_lvl += 1;
+            }
+
+            frame.commit();
+
+        }
+
+    }
+
+    pub fn fade_out(&mut self, gfx: &mut Graphics, bg: &RegularBackground, time: i32) {
+
+        let blend_amts: [Num<u8, 4>; 5] = [
+            num!(0.0),
+            num!(0.25),
+            num!(0.50),
+            num!(0.75),
+            num!(1.0),
+        ];
+
+        let mut blend_lvl = 0;
+
+        for anim_frame in 0..time {
+
+            let mut frame = gfx.frame();
+
+            let bg_id = bg.show(&mut frame);
+
+            frame.blend().darken(blend_amts[blend_lvl]).enable_background(bg_id).enable_object();
+
+            if anim_frame % (time / 4) == 0 && blend_lvl < 4 {
                 blend_lvl += 1;
             }
 
@@ -101,7 +166,11 @@ impl Menu {
 
     fn animate_start(&mut self, gfx: &mut Graphics, bg: &RegularBackground) {
 
-        for letter in self.text.iter_mut() {
+        for letter in self.text_one.iter_mut() {
+            letter.set_graphics_mode(GraphicsMode::AlphaBlending);
+        }
+
+        for letter in self.text_two.iter_mut() {
             letter.set_graphics_mode(GraphicsMode::AlphaBlending);
         }
 
@@ -117,6 +186,8 @@ impl Menu {
         ];
 
         let mut blend_lvl = 0;
+
+        let mut in_motion = [false; 4];
         
 
         for anim_frame in 0..START_ANIMATION {
@@ -125,14 +196,29 @@ impl Menu {
 
             let bg_id = bg.show(&mut frame);
 
-            for (i, letter) in self.text.iter_mut().enumerate() {
+            for (i, letter) in self.text_one.iter_mut().enumerate() {
 
-                if (anim_frame % 16) / 4 == i as i32 {
-                    self.in_motion[i] = true;
+                match i {
+                    0..=1 => letter.set_pos(letter.pos() + Vector2D::new(-12, 0)),
+                    2..=3 => letter.set_pos(letter.pos() + Vector2D::new(12, 0)),
+                    _ => letter.set_pos(letter.pos()), //UNREACHABLE
+                };
+
+            }
+
+            for (i, letter) in self.text_two.iter_mut().enumerate() {
+
+                if (anim_frame % 8) / 2 == i as i32 {
+                    //println!("frame: {}, frame % 8 / 2: {}", anim_frame, (anim_frame % 8) / 2);
+                    in_motion[i] = true;
                 }
 
-                if self.in_motion[i] == true && !is_above(letter.pos()) {
-                    letter.set_pos(letter.pos() + Vector2D::new(0, -anim_frame));
+                if in_motion[i] == true && !is_above(letter.pos()) {
+                    if letter.pos().y == TOP_LEFT.y + TILE_SIZE as i32 {
+                        letter.set_pos(letter.pos() + Vector2D::new(0, 6));
+                    } else {
+                        letter.set_pos(letter.pos() + Vector2D::new(0, -8));
+                    }
                 }
 
             }
@@ -149,12 +235,9 @@ impl Menu {
                 
             }
 
-
             self.show(&mut frame);
 
             frame.commit();
-
-
 
         }
 
@@ -194,7 +277,7 @@ impl Game {
 
     pub fn animate_move_tiles(&mut self, gfx: &mut Graphics, bg: &RegularBackground) {
 
-        for _i in 0..ANIMATION_TIME {
+        for _i in 0..TILE_ANIMATION {
 
             let mut frame = gfx.frame();
 
@@ -241,7 +324,7 @@ impl Tile {
         let og_position_adjusted = self.pos * TILE_SIZE as i32 + TOP_LEFT;
         let destination_adjusted = destination * TILE_SIZE as i32 + TOP_LEFT;
 
-        self.object.set_pos(self.object.pos() + (destination_adjusted - og_position_adjusted) / (ANIMATION_TIME + 1));
+        self.object.set_pos(self.object.pos() + (destination_adjusted - og_position_adjusted) / (TILE_ANIMATION + 1));
         self.object.set_priority(Priority::P0);
         self.object.show(frame);
 
