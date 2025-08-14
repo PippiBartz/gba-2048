@@ -1,6 +1,7 @@
 use agb::display::object::SpriteVram;
 use agb::display::tiled::RegularBackground;
 use agb::display::Graphics;
+use agb::println;
 use agb::{fixnum::Vector2D, rng::RandomNumberGenerator};
 extern crate alloc;
 use alloc::vec;
@@ -75,7 +76,8 @@ impl Game {
 
         if self.shift_tiles(dir) {
             self.animate_move_tiles(gfx, bg);
-            self.spawn_tile(rng);
+            //if spawn flag is false, do not spawn new tiles
+            if self.spawn { self.spawn_tile(rng) }
         }
 
     }
@@ -126,9 +128,8 @@ impl Move {
         Move { start: positions.0, end: positions.1, upgrade: false }
     }
 
-    fn upgrade(&mut self) -> Self {
+    fn upgrade(&mut self) {
         self.upgrade = true;
-        self.clone()
     }
 
 
@@ -288,7 +289,8 @@ impl Move {
 fn simulate(mut board: Vec<Tile>, mv: Move) -> Vec<Tile> {
     
     if mv.upgrade {
-        board[mv.end].value = board[mv.start].value * 2;
+        //if the move is an upgrade, tell the simulation the tile now has a value of 1, which is normally impossible and acts as a dummy tile - not upgradeable, but collidable
+        board[mv.end].value = 1;
     } else {
         board[mv.end].value = board[mv.start].value;
     }

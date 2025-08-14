@@ -5,18 +5,51 @@
 #![cfg_attr(test, test_runner(agb::test_runner::test_runner))]
 
 
-use agb::{display::{object::{Object, SpriteVram}, tiled::{RegularBackground, RegularBackgroundSize, TileFormat, VRAM_MANAGER}, Priority}, fixnum::Vector2D, include_aseprite, include_background_gfx, input::{Button, ButtonController}, rng::RandomNumberGenerator};
+use agb::{display::{object::{Object, Sprite, SpriteVram}, tiled::{RegularBackground, RegularBackgroundSize, TileFormat, VRAM_MANAGER}, Graphics, Priority}, fixnum::Vector2D, include_aseprite, include_background_gfx, input::{Button, ButtonController}, rng::RandomNumberGenerator};
 use alloc::vec::Vec;
 use alloc::vec;
 
-use crate::graphics::sprite_init;
+use crate::graphics::{game_sprite_init, value_to_sprite_index};
 use crate::logic::Direction;
 pub mod graphics;
 pub mod logic;
 extern crate alloc;
 
 include_background_gfx!(mod background, bg => deduplicate "gfx/bg.aseprite");
-include_aseprite!(mod tile_gfx, "gfx/tiles.aseprite");
+include_aseprite!(mod tile_gfx, "gfx/tiles.aseprite", "gfx/tiles_menu.aseprite", "gfx/buttons.aseprite");
+
+#[derive(Debug, Clone)]
+struct Menu {
+    text: [Object; 4],
+    in_motion: [bool; 4],
+    button: Object,
+    //sprites: Vec<SpriteVram>,
+    test: bool,
+    pressed: bool,
+    high_score: u32,
+}
+
+impl Menu {
+
+    fn new() -> Self {
+
+        Self {
+            text: [
+                Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(0))),
+                Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(1))),
+                Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(2))),
+                Object::new(SpriteVram::from(tile_gfx::PLAY.sprite(3))),
+            ],
+            in_motion: [false; 4],
+            button: Object::new(SpriteVram::from(tile_gfx::A.sprite(0))),
+            test: false,
+            pressed: false,
+            high_score: 0,
+        }
+    }
+
+
+}
 
 
 #[derive(Debug, Clone)]
@@ -54,6 +87,7 @@ struct Game {
     board: Vec<Tile>,
     sprites: Vec<SpriteVram>,
     score: u32,
+    spawn: bool,
 }
 
 impl Game {
@@ -62,7 +96,7 @@ impl Game {
 
         let mut tiles = vec![];
 
-        let sprites = sprite_init();
+        let sprites = game_sprite_init();
 
         for y in 0..4 {
             for x in 0..4 {
@@ -81,7 +115,27 @@ impl Game {
             tile.set_pos();
         }
 
-        Self { board: tiles, sprites: sprites, score: 0 }
+        Self { board: tiles, sprites: sprites, score: 0, spawn: true }
+    }
+
+    fn init_with_board(values: [u16; 16]) -> Self {
+
+        let mut game = Self::new();
+
+        for (i, value) in values.iter().enumerate() {
+
+            let sprite = game.sprites[value_to_sprite_index(*value).unwrap_or(0)].clone();
+
+            game.board[i].value = *value;
+            game.board[i].object = Object::new(sprite);
+
+
+        }
+
+        game.spawn = false;
+
+        game
+
     }
 
     fn init(mut rng: &mut RandomNumberGenerator) -> Self {
@@ -92,6 +146,39 @@ impl Game {
         game.spawn_tile(&mut rng);
 
         game
+
+    }
+
+    fn play(&mut self, input: &mut ButtonController, gfx: &mut Graphics, rng: &mut RandomNumberGenerator, bg: &RegularBackground) {
+
+        loop {
+            input.update();
+
+            //TODO: improve input system
+            if input.is_just_pressed(Button::UP) {
+                self.shift(Direction::Up, rng, gfx, &bg);
+            } else if input.is_just_pressed(Button::DOWN) {
+                self.shift(Direction::Down, rng, gfx, &bg);
+            } else if input.is_just_pressed(Button::LEFT) {
+                self.shift(Direction::Left, rng, gfx, &bg);
+            } else if input.is_just_pressed(Button::RIGHT) {
+                self.shift(Direction::Right, rng, gfx, &bg);
+            }
+    
+            if self.spawn == false {
+                if input.is_just_pressed(Button::B) {
+                    self.spawn_tile(rng);
+                }
+            }
+
+            let mut frame = gfx.frame();
+    
+            bg.show(&mut frame);
+            self.show_tiles(&mut frame);
+            
+    
+            frame.commit();
+        }
 
     }
 
@@ -111,30 +198,61 @@ pub fn run(mut gba: agb::Gba) -> ! {
     let mut bg = RegularBackground::new(Priority::P0, RegularBackgroundSize::Background32x32, TileFormat::FourBpp);
     bg.fill_with(&background::bg);
 
-    let mut game = Game::init(&mut rng);
+    let mut menu = Menu::new();
+    menu.set();
 
 
     loop {
 
-        input.update();
+        while !menu.pressed {
 
-        //TODO: improve input system
-        if input.is_just_pressed(Button::UP) {
-            game.shift(Direction::Up, &mut rng, &mut gfx, &bg);
-        } else if input.is_just_pressed(Button::DOWN) {
-            game.shift(Direction::Down, &mut rng, &mut gfx, &bg);
-        } else if input.is_just_pressed(Button::LEFT) {
-            game.shift(Direction::Left,  &mut rng, &mut gfx, &bg);
-        } else if input.is_just_pressed(Button::RIGHT) {
-            game.shift(Direction::Right, &mut rng, &mut gfx, &bg);
+            rng.next_i32(); //call every frame to randomize rng state
+            let mut frame = gfx.frame();
+
+            bg.show(&mut frame);
+            menu.show(&mut frame);
+
+            frame.commit();
+
+
+            input.update();
+
+            //CHECK FOR PRESS
+
+            if input.is_pressed(Button::SELECT) {
+                menu.test(true);
+            } else {
+                menu.test(false);
+            }
+
+            if input.is_just_pressed(Button::A) {
+                menu.animate(&mut gfx, &bg);
+                menu.pressed = true;
+            }
+
         }
 
-        let mut frame = gfx.frame();
+        if menu.test {
 
-        game.show_tiles(&mut frame);
-        bg.show(&mut frame);
+            let tile_values = [
+                2, 2, 2, 2,
+                4, 0, 2, 2,
+                2, 4, 4, 8,
+                8, 4, 4, 0,
+            ];
 
-        frame.commit();
+            let mut game = Game::init_with_board(tile_values);
+
+            game.play(&mut input, &mut gfx, &mut rng, &bg);
+
+        } else {
+
+            let mut game = Game::init(&mut rng);
+
+            game.play(&mut input, &mut gfx, &mut rng, &bg);
+
+        }
+
 
     }
 }
